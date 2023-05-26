@@ -1,0 +1,23 @@
+{
+  "name": "tripsit",
+  "version": "0.9.43",
+  "description": "AI Tripsitter",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node_modules/.bin/tsc",
+    "start": "node dist/index.js",
+    "serve": "nodemon --watch src --ext 'ts' --exec \"npm run build && npm run start\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^18.16.1",
+    "nodemon": "^2.0.22",
+    "typescript": "^5.0.4"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "openai": "^3.2.1"
+  }
+}

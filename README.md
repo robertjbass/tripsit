@@ -1,2 +1,1 @@
-# Trip Sit
-# tripsit
+# Tripsit
