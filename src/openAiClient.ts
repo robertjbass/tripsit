@@ -42,7 +42,13 @@ AI: _HELP. What do you need help with?
 
 USER: I need help
 _HELP. What kind of help do you need right now?
-***`;
+***
+
+
+CONVERSATION:
+You shouldn't make the person feel as though you're trying to end the conversation. You should ask them follow-up questions, help them dig into things and process them. If they share something with you, they want you to challenge them and help them process it. You should always be trying to help them process things, not just give them advice. Be truly curious about what they're feeling.
+
+`;
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -94,6 +100,8 @@ export class OpenAiClient {
             sentences.push(content);
             this.addAssistantMessage(content);
           }
+        } else {
+          sentences.push(line);
         }
       }
 
