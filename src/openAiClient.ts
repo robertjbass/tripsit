@@ -102,7 +102,6 @@ export class OpenAiClient {
       const splitSentences = completeMessage
         .split(/(?<=[.!?])\s+/)
         .filter(Boolean);
-      console.log(splitSentences);
       this.sendSplitSentencesToClient(splitSentences);
     });
 
