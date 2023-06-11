@@ -1,6 +1,6 @@
 import { Configuration, OpenAIApi } from "openai";
-import readline from "readline";
 import { TextDecoder } from "util";
+import { Request, Response } from "express";
 import "dotenv/config";
 
 const substance = "Psylocibin Mushrooms";
@@ -23,7 +23,6 @@ const defaultSystemPrompt = `You are an AI tripsitter. You are speaking with som
 IMPORTANT SAFETY INFORMATION:
 - You will have an intervention mode built in. If the user says "I need help" or if they are about to do something life-threatening you will respond in 1 word as follows: "_HELP" (This will notify the application that human intervention is needed. The application will then notify the user's emergency contact.)
 
-
 ***GOOD EXAMPLES
 USER: I need help
 AI: _HELP
@@ -34,8 +33,6 @@ AI: _HELP
 
 Do not say anything after "_HELP". The application will handle the rest.
 
-
-
 ***BAD EXAMPLES
 USER: I need help
 AI: _HELP. Can you please tell me more about what's going on?
@@ -45,9 +42,7 @@ AI: _HELP. What do you need help with?
 
 USER: I need help
 _HELP. What kind of help do you need right now?
-***
-
-`;
+***`;
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -59,8 +54,10 @@ const decoder = new TextDecoder("utf-8");
 export class OpenAiClient {
   private openai: OpenAIApi;
   private messages: ChatMessage[];
+  private connections: Response[];
 
   constructor() {
+    this.connections = [];
     this.messages = [{ role: "system", content: defaultSystemPrompt }];
     const configuration = new Configuration({
       apiKey: process.env.OPENAI_API_KEY,
@@ -68,72 +65,76 @@ export class OpenAiClient {
     this.openai = new OpenAIApi(configuration);
   }
 
-  private async prompt(prompt: string) {
-    if (prompt === "") return new Promise((resolve) => resolve(this.run()));
-    return await this.chatCompletion(prompt);
-  }
+  private async chatCompletion(): Promise<void> {
+    const completion: any = await this.openai.createChatCompletion(
+      {
+        messages: this.messages,
+        model: "gpt-3.5-turbo",
+        stream: true,
+      },
+      { responseType: "stream" }
+    );
 
-  private async chatCompletion(prompt: string) {
-    return new Promise(async (resolve, reject) => {
-      this.messages.push({ role: "user", content: prompt });
-      const completion: any = await this.openai.createChatCompletion(
-        {
-          messages: this.messages,
-          model: "gpt-3.5-turbo",
-          stream: true,
-        },
-        { responseType: "stream" }
-      );
+    completion.data.on("data", (chunk: any) => {
+      const lines = decoder.decode(chunk).split("\n");
+      const mappedLines = lines
+        .map((line) => line.replace(/^data: /, "").trim())
+        .filter((line) => line !== "" && line !== undefined);
 
-      let resultText = "";
-      completion.data.on("data", (chunk: any) => {
-        const lines = decoder.decode(chunk).split("\n");
-        const mappedLines = lines
-          .map((line) => line.replace(/^data: /, "").trim())
-          .filter((line) => line !== "" && line !== undefined);
+      let sentences: string[] = [];
 
-        for (const line of mappedLines) {
-          if (line !== "[DONE]") {
-            const parsedLine = JSON.parse(line);
-            const { choices } = parsedLine;
-            const { delta } = choices[0];
-            const { content } = delta;
+      for (const line of mappedLines) {
+        if (line !== "[DONE]") {
+          const parsedLine = JSON.parse(line);
+          const { choices } = parsedLine;
+          const { delta } = choices[0];
+          const { content } = delta;
 
-            if (content) {
-              resultText += content;
-              process.stdout.write(content);
-              return;
-            }
+          if (content) {
+            sentences.push(content);
+            this.addAssistantMessage(content);
           }
         }
-        this.addAssistantMessage(resultText);
-      });
+      }
 
-      completion.data.on("end", () => resolve(this.run()));
-      completion.data.on("error", (error: any) => reject(error));
+      // Split sentences and send to clients
+      const completeMessage = sentences.join(" ");
+      const splitSentences = completeMessage
+        .split(/(?<=[.!?])\s+/)
+        .filter(Boolean);
+      console.log(splitSentences);
+      this.sendSplitSentencesToClient(splitSentences);
     });
+
+    completion.data.on("error", (error: any) => console.error(error));
   }
 
   private addAssistantMessage(content: string) {
     this.messages.push({ role: "assistant", content });
   }
 
-  private promptUser() {
-    const prompt = `\n\nUSER: `;
-    process.stdout.write(prompt);
+  private sendSplitSentencesToClient(sentences: string[]) {
+    const message = sentences.join("\n");
+
+    this.connections.forEach((res) => {
+      res.write(`data: ${message}\n\n`);
+    });
   }
 
-  public async run() {
-    this.promptUser();
-    const input = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      terminal: false,
-    });
+  public addConnection(req: Request, res: Response) {
+    this.connections.push(res);
 
-    input.on("line", (line: any) => {
-      input.close();
-      this.prompt(line).catch(console.error);
+    // When the connection is closed, remove it from the array
+    req.on("close", () => {
+      this.connections = this.connections.filter((conn) => conn !== res);
     });
+  }
+
+  public async processMessage(message: string) {
+    // Add the user's message to the chat history
+    this.messages.push({ role: "user", content: message });
+
+    // Get the assistant's response and add it to the chat history
+    await this.chatCompletion();
   }
 }
