@@ -2,6 +2,7 @@ import { OpenAiClient } from "./openAiClient";
 import express, { Request, Response } from "express";
 import cors from "cors";
 import "dotenv/config";
+import { AwsPollyClient } from "./polly";
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -11,6 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
 const openAiClient = new OpenAiClient();
+const pollyClient = new AwsPollyClient();
 
 // Endpoint for sending a message
 app.post("/message", express.text(), (req: Request, res: Response) => {
@@ -36,6 +38,18 @@ app.get("/connect", (req: Request, res: Response) => {
 
   // If the connection is closed by the client, remove it
   req.on("close", () => res.end());
+});
+
+app.post("/synthesize", async (req: Request, res: Response) => {
+  try {
+    const text = req.body.sentence;
+    const audioBuffer = (await pollyClient.say(text)) as any;
+    const audioBase64 = audioBuffer.toString("base64");
+    res.json({ audio: audioBase64 });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to generate speech" });
+  }
 });
 
 // app.get("/", (_req: Request, res: Response) => {
