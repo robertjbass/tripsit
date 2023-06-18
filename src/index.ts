@@ -1,5 +1,5 @@
-import { OpenAiClient } from "./openAiClient";
-import express, { Request, Response } from "express";
+import { OpenAiClientManager } from "./openAiClient";
+import express, { Request, Response, text } from "express";
 import cors from "cors";
 import "dotenv/config";
 import { AwsPollyClient } from "./polly";
@@ -11,11 +11,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-const openAiClient = new OpenAiClient();
 const pollyClient = new AwsPollyClient();
+const openAiClientManager = new OpenAiClientManager();
 
 // Endpoint for sending a message
-app.post("/message", express.text(), (req: Request, res: Response) => {
+app.post("/message", text(), (req: Request, res: Response) => {
+  const sessionId = req.headers["x-session-id"] as string;
+
+  if (!sessionId) {
+    console.log("Missing X-Session-Id header");
+    return res.status(400).send("Missing X-Session-Id header");
+  }
+
+  const openAiClient = openAiClientManager.getInstance(sessionId);
   const message = req.body.message;
   openAiClient
     .processMessage(message)
@@ -28,11 +36,22 @@ app.post("/message", express.text(), (req: Request, res: Response) => {
 
 // Endpoint for adding a connection
 app.get("/connect", (req: Request, res: Response) => {
+  const sessionId = req.query.session_id as string;
+
+  if (!sessionId) {
+    console.log("Missing session_id query parameter");
+    return res.status(400).send("Missing session_id query parameter");
+  }
+
+  const openAiClient = openAiClientManager.getInstance(sessionId);
+
   // Set up Server-Sent Events
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
-  res.flushHeaders(); // flush the headers to establish SSE with client
+
+  // Flush the headers to establish SSE with client
+  res.flushHeaders();
 
   openAiClient.addConnection(req, res);
 
@@ -51,9 +70,5 @@ app.post("/synthesize", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to generate speech" });
   }
 });
-
-// app.get("/", (_req: Request, res: Response) => {
-//   res.json({ message: "Hello World" });
-// });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
