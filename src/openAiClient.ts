@@ -1,7 +1,12 @@
 import { Configuration, OpenAIApi } from "openai";
 import { TextDecoder } from "util";
 import { Request, Response } from "express";
-import "dotenv/config";
+const decoder = new TextDecoder("utf-8");
+
+type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
 
 const substance = "Psylocibin Mushrooms";
 const dose = "3.5 grams";
@@ -50,14 +55,7 @@ You shouldn't make the person feel as though you're trying to end the conversati
 
 `;
 
-type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
-
-const decoder = new TextDecoder("utf-8");
-
-export class OpenAiClient {
+class OpenAiClient {
   private openai: OpenAIApi;
   private messages: ChatMessage[];
   private connections: Response[];
@@ -143,5 +141,22 @@ export class OpenAiClient {
 
     // Get the assistant's response and add it to the chat history
     await this.chatCompletion();
+  }
+}
+
+export class OpenAiClientManager {
+  private instances: { [key: string]: OpenAiClient };
+
+  constructor() {
+    this.instances = {};
+  }
+
+  public getInstance(sessionId: string): OpenAiClient {
+    if (!this.instances[sessionId]) {
+      this.instances[sessionId] = new OpenAiClient();
+    }
+
+    const instance = this.instances[sessionId];
+    return instance;
   }
 }
