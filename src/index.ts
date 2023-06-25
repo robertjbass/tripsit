@@ -73,4 +73,11 @@ app.post("/synthesize", async (req: Request, res: Response) => {
   }
 });
 
+app.post("/set-prompt", (req: Request, res: Response) => {
+  const { sessionId, systemMessage } = req.body;
+  const openAiClient = openAiClientManager.getInstance(sessionId);
+  openAiClient.setSystemPrompt(systemMessage);
+  res.status(200).send();
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
